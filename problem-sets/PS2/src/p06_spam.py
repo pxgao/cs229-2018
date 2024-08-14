@@ -4,7 +4,7 @@ import numpy as np
 
 import util
 import svm
-
+import re
 
 def get_words(message):
     """Get the normalized list of words from a message string.
@@ -21,6 +21,7 @@ def get_words(message):
     """
 
     # *** START CODE HERE ***
+    return re.sub(r'\W+', ' ', message).lower().split(' ')
     # *** END CODE HERE ***
 
 
@@ -41,6 +42,14 @@ def create_dictionary(messages):
     """
 
     # *** START CODE HERE ***
+    all_words = set()
+    for m in messages:
+        ws = get_words(m)
+        for w in ws:
+            all_words.add(w)
+
+    return { w:i for i,w in enumerate(all_words) }
+
     # *** END CODE HERE ***
 
 
@@ -62,8 +71,21 @@ def transform_text(messages, word_dictionary):
         A numpy array marking the words present in each message.
     """
     # *** START CODE HERE ***
+    result = np.zeros((len(messages), len(word_dictionary)), dtype=int)
+    for mi in range(0, len(messages)):
+        m = messages[mi]
+        ws = get_words(m)
+        for w in ws:
+            if w in word_dictionary:
+                result[mi, word_dictionary[w]] += 1
+    return result
     # *** END CODE HERE ***
 
+class Model:
+    def __init__(self):
+        self.phi_spam = []
+        self.phi_non_spam = []
+        self.phi_y = 0
 
 def fit_naive_bayes_model(matrix, labels):
     """Fit a naive bayes model.
@@ -82,6 +104,27 @@ def fit_naive_bayes_model(matrix, labels):
     """
 
     # *** START CODE HERE ***
+    m = Model()
+    m.phi_spam = np.ones((len(matrix[0])), float)
+    m.phi_non_spam = np.ones((len(matrix[0])), float)
+    spam_word_count = 0
+    non_spam_word_count = 0
+    spam_count = 0
+    for i in range(len(labels)):
+        ma = matrix[i]
+        y = labels[i]
+        if y == 1:
+            spam_word_count += sum(ma)
+            m.phi_spam += ma
+            spam_count += 1
+        else:
+            non_spam_word_count += sum(ma)
+            m.phi_non_spam += ma
+    v_size = len(matrix[0])
+    m.phi_spam = m.phi_spam / (spam_word_count + v_size)
+    m.phi_non_spam = m.phi_non_spam / (non_spam_word_count + v_size)
+    m.phi_y = float(spam_count) / len(labels)
+    return m
     # *** END CODE HERE ***
 
 
@@ -98,6 +141,12 @@ def predict_from_naive_bayes_model(model, matrix):
     Returns: A numpy array containg the predictions from the model
     """
     # *** START CODE HERE ***
+    result = []
+    for entry in matrix:
+        spam_log_p = sum(np.log(model.phi_spam) * entry) + np.log(model.phi_y)
+        non_spam_log_p = sum(np.log(model.phi_non_spam) * entry) + np.log(1.0 - model.phi_y)
+        result.append(spam_log_p > non_spam_log_p)
+    return result
     # *** END CODE HERE ***
 
 
@@ -114,6 +163,9 @@ def get_top_five_naive_bayes_words(model, dictionary):
     Returns: The top five most indicative words in sorted order with the most indicative first
     """
     # *** START CODE HERE ***
+    indicator = (-np.log(model.phi_spam / model.phi_non_spam)).argsort()[:5]
+    word_dict = [word for word in dictionary.keys()]
+    return [word_dict[index] for index in indicator]
     # *** END CODE HERE ***
 
 
@@ -134,6 +186,15 @@ def compute_best_svm_radius(train_matrix, train_labels, val_matrix, val_labels, 
         The best radius which maximizes SVM accuracy.
     """
     # *** START CODE HERE ***
+    best_r = -1
+    best_count = 0
+    for r in radius_to_consider:
+        res = svm.train_and_predict_svm(train_matrix, train_labels, val_matrix, r)
+        c = sum(res == val_labels)
+        if c > best_count:
+            best_count = c
+            best_r = r
+    return best_r
     # *** END CODE HERE ***
 
 
@@ -143,7 +204,6 @@ def main():
     test_messages, test_labels = util.load_spam_dataset('../data/ds6_test.tsv')
     
     dictionary = create_dictionary(train_messages)
-
     util.write_json('./output/p06_dictionary', dictionary)
 
     train_matrix = transform_text(train_messages, dictionary)
@@ -154,7 +214,6 @@ def main():
     test_matrix = transform_text(test_messages, dictionary)
 
     naive_bayes_model = fit_naive_bayes_model(train_matrix, train_labels)
-
     naive_bayes_predictions = predict_from_naive_bayes_model(naive_bayes_model, test_matrix)
 
     np.savetxt('./output/p06_naive_bayes_predictions', naive_bayes_predictions)

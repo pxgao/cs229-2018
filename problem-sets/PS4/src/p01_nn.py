@@ -41,6 +41,10 @@ def backward_softmax(x, grad_outputs):
     """
     
     # *** START CODE HERE ***
+    sm = forward_softmax(x)
+    k = np.diag(sm) - np.outer(sm,sm)
+    return k.dot(grad_outputs)
+    #return forward_softmax(x) - (grad_outputs!=0).astype(int) #sol
     # *** END CODE HERE ***
 
 def forward_relu(x):
@@ -71,6 +75,8 @@ def backward_relu(x, grad_outputs):
     """
 
     # *** START CODE HERE ***
+    grad_outputs[x <= 0] = 0
+    return grad_outputs
     # *** END CODE HERE ***
 
 def get_initial_params():
@@ -155,7 +161,18 @@ def backward_convolution(conv_W, conv_b, data, output_grad):
     """
 
     # *** START CODE HERE ***
-    # *** END CODE HERE ***
+    conv_channels, _, conv_width, conv_height = conv_W.shape
+    input_channels, input_width, input_height = data.shape
+    g_w = np.zeros(conv_W.shape)
+    g_b = np.sum(output_grad, (1,2))
+    g_d = np.zeros(data.shape)
+    for x in range(input_width - conv_width + 1):
+        for y in range(input_height - conv_height + 1):
+            for output_channel in range(conv_channels):
+                g_w[output_channel,:,:,:] += data[:,x:x+conv_width,y:y+conv_height] * output_grad[output_channel,x,y]
+                g_d[:,x:x+conv_width,y:y+conv_height] += conv_W[output_channel,:,:,:] * output_grad[output_channel,x,y]
+    return (g_w, g_b, g_d)
+     # *** END CODE HERE ***
 
 def forward_max_pool(data, pool_width, pool_height):
     """
@@ -197,6 +214,16 @@ def backward_max_pool(data, pool_width, pool_height, output_grad):
     """
     
     # *** START CODE HERE ***
+    g = np.zeros(data.shape)
+    input_channels, input_width, input_height = data.shape
+    for i in range(input_channels):
+        for x in range(0, input_width, pool_width):
+            for y in range(0, input_height, pool_height):
+                submat = data[i, x:(x + pool_width), y:(y + pool_height)]
+                m = np.unravel_index( np.argmax(submat), submat.shape)
+                g[i, x:(x + pool_width), y:(y + pool_height)][i, m] = output_grad[i, x // pool_width, y // pool_height]
+    return g
+
     # *** END CODE HERE ***
 
 def forward_cross_entropy_loss(probabilities, labels):
@@ -234,6 +261,9 @@ def backward_cross_entropy_loss(probabilities, labels):
     """
 
     # *** START CODE HERE ***
+    result = - 1.0 / probabilities
+    result[labels == 0] = 0.0
+    return result
     # *** END CODE HERE ***
 
 def forward_linear(weights, bias, data):
@@ -248,6 +278,7 @@ def forward_linear(weights, bias, data):
     Returns:
         The result of the linear layer
     """
+    # y = Wd + b 
     return data.dot(weights) + bias
 
 def backward_linear(weights, bias, data, output_grad):
@@ -265,6 +296,11 @@ def backward_linear(weights, bias, data, output_grad):
     """
 
     # *** START CODE HERE ***
+    d_w = np.outer(data, output_grad)
+    d_b = output_grad
+    d_d = weights.dot(output_grad)
+    return (d_w, d_b, d_d)
+    
     # *** END CODE HERE ***
 
 def forward_prop(data, labels, params):
@@ -324,6 +360,34 @@ def backward_prop(data, labels, params):
     """
 
     # *** START CODE HERE ***
+    result = {}
+
+    W1 = params['W1']
+    b1 = params['b1']
+    W2 = params['W2']
+    b2 = params['b2']
+
+    first_convolution = forward_convolution(W1, b1, data)
+    first_max_pool = forward_max_pool(first_convolution, MAX_POOL_SIZE, MAX_POOL_SIZE)
+    first_after_relu = forward_relu(first_max_pool)
+    flattened = np.reshape(first_after_relu, (-1))
+    logits = forward_linear(W2, b2, flattened)
+    y = forward_softmax(logits)
+    loss = forward_cross_entropy_loss(y, labels)
+
+    d_y = backward_cross_entropy_loss(y, labels)
+    d_logits = backward_softmax(logits, d_y)
+    d_W2, d_b2, d_flattened = backward_linear(W2, b2, flattened, d_logits)
+    d_first_after_relu = np.reshape(d_flattened, first_after_relu.shape)
+    d_first_max_pool = backward_relu(first_max_pool, d_first_after_relu)
+    d_first_convolution = backward_max_pool(first_convolution, MAX_POOL_SIZE, MAX_POOL_SIZE, d_first_max_pool)
+    d_W1, d_b1, d_data = backward_convolution(W1, b1, data, d_first_convolution)
+
+    result['W1'] = d_W1
+    result['b1'] = d_b1
+    result['W2'] = d_W2
+    result['b2'] = d_b2
+    return result
     # *** END CODE HERE ***
 
 def forward_prop_batch(batch_data, batch_labels, params, forward_prop_func):

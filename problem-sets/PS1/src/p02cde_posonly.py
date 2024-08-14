@@ -1,5 +1,6 @@
 import numpy as np
 import util
+import tensorflow as tf
 
 from p01b_logreg import LogisticRegression
 
@@ -28,8 +29,42 @@ def main(train_path, valid_path, test_path, pred_path):
     # *** START CODE HERE ***
     # Part (c): Train and test on true labels
     # Make sure to save outputs to pred_path_c
+    x_train, t_train = util.load_dataset(train_path, label_col='t', add_intercept=True)
+    x_test, t_test = util.load_dataset(test_path, label_col='t', add_intercept=True)
+
+    model_t = LogisticRegression()
+    model_t.fit(x_train, t_train)
+
+    util.plot(x_test, t_test, model_t.theta, 'output/p02c.png')
+
+    t_pred_c = model_t.predict(x_test)
+    np.savetxt(pred_path_c, t_pred_c > 0.5, fmt='%d')
     # Part (d): Train on y-labels and test on true labels
     # Make sure to save outputs to pred_path_d
+    x_train, y_train = util.load_dataset(train_path, label_col='y', add_intercept=True)
+    x_test, y_test = util.load_dataset(test_path, label_col='y', add_intercept=True)
+
+    model_y = LogisticRegression()
+    model_y.fit(x_train, y_train)
+
+    util.plot(x_test, y_test, model_y.theta, 'output/p02d.png')
+
+    y_pred = model_y.predict(x_test)
+    
+    np.savetxt(pred_path_d, y_pred > 0.5, fmt='%d')
     # Part (e): Apply correction factor using validation set and test on true labels
     # Plot and use np.savetxt to save outputs to pred_path_e
+    x_valid, y_valid = util.load_dataset(valid_path, label_col='y', add_intercept=True)
+
+    #alpha = tf.reduce_mean(model_y.predict(x_valid))
+    #correction = 1 + tf.math.log(2 / alpha - 1) / model_y.theta[0]
+    alpha = np.mean(model_y.predict(x_valid))
+    correction = 1 + np.log(2 / alpha - 1) / model_y.theta[0]
+    print("theta ", model_y.theta[0])
+    print(alpha)
+    print(correction)
+    util.plot(x_test, t_test, model_y.theta, 'output/p02e.png', correction)
+
+    t_pred_e = y_pred / alpha
+    np.savetxt(pred_path_e, t_pred_e > 0.5, fmt='%d')
     # *** END CODER HERE

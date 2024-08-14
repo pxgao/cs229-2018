@@ -28,10 +28,27 @@ def main(is_semi_supervised, trial_num):
     # *** START CODE HERE ***
     # (1) Initialize mu and sigma by splitting the m data points uniformly at random
     # into K groups, then calculating the sample mean and covariance for each group
+    m = x.shape[0]
+    idx = np.random.permutation(m)
+    group_member= int(m / K)
+    mu = []
+    sigma = []
+
+    for i in range(K):
+    	if i!=K-1:
+    		x_temp = x[idx[i*group_member: (i+1)*group_member], :]
+    	else:
+    		x_temp = x[idx[i*group_member: m], :]
+
+    	mu_temp = np.mean(x_temp, axis=0)
+    	mu.append(mu_temp)
+    	sigma.append((x_temp-mu_temp).T.dot(x_temp-mu_temp) / x_temp.shape[0])
     # (2) Initialize phi to place equal probability on each Gaussian
     # phi should be a numpy array of shape (K,)
+    phi = np.ones(K) / K
     # (3) Initialize the w values to place equal probability on each Gaussian
     # w should be a numpy array of shape (m, K)
+    w = np.ones((m, K)) / K
     # *** END CODE HERE ***
 
     if is_semi_supervised:
@@ -65,6 +82,7 @@ def run_em(x, w, phi, mu, sigma):
         More specifically, w[i, j] should contain the probability of
         example x^(i) belonging to the j-th Gaussian in the mixture.
     """
+    # m examples, n dimension, k clusters
     # No need to change any of these parameters
     eps = 1e-3  # Convergence threshold
     max_iter = 1000
@@ -77,11 +95,24 @@ def run_em(x, w, phi, mu, sigma):
         pass  # Just a placeholder for the starter code
         # *** START CODE HERE
         # (1) E-step: Update your estimates in w
+        for i in range(K):
+            w[:,i] = 1.0 / (np.linalg.det(sigma[i])**0.5) * phi[i] * np.exp(-0.5 ) * ((x-mu[i]).dot(np.linalg.inv(sigma[i])) * (x-mu[i])).sum(axis=1)
+        w /= w.sum(axis=1)[:, None]
         # (2) M-step: Update the model parameters phi, mu, and sigma
+        phi = np.mean(w, axis=0)
+        for i in range(K):
+        	mu[i] = x.T.dot(w[:, i]) / sum(w[:, i])
+        	sigma[i] = (w[:, i][:, None] * (x-mu[i])).T.dot(x-mu[i]) / sum(w[:, i])        
         # (3) Compute the log-likelihood of the data to check for convergence.
         # By log-likelihood, we mean `ll = sum_x[log(sum_z[p(x|z) * p(z)])]`.
         # We define convergence by the first iteration where abs(ll - prev_ll) < eps.
         # Hint: For debugging, recall part (a). We showed that ll should be monotonically increasing.
+        it += 1
+        prev_ll = ll
+        p_xz = np.zeros(w.shape)
+        for i in range(K):
+        	p_xz[:, i] = np.exp(-0.5 * ((x-mu[i]).dot(np.linalg.inv(sigma[i])) * (x-mu[i])).sum(axis=1)) / (np.linalg.det(sigma[i])**0.5) * phi[i]
+        ll = np.sum(np.log(p_xz))
         # *** END CODE HERE ***
 
     return w
@@ -119,10 +150,25 @@ def run_semi_supervised_em(x, x_tilde, z, w, phi, mu, sigma):
         pass  # Just a placeholder for the starter code
         # *** START CODE HERE ***
         # (1) E-step: Update your estimates in w
+        for i in range(K):
+        	w[:, i] = np.exp(-0.5 * ((x-mu[i]).dot(np.linalg.inv(sigma[i])) * (x-mu[i])).sum(axis=1)) / (np.linalg.det(sigma[i])**0.5) * phi[i]
+        w /= w.sum(axis=1)[:, None]
         # (2) M-step: Update the model parameters phi, mu, and sigma
+        for i in range(K):
+        	phi[i] = (sum(w[:, i]) + alpha * sum(z==i)) / (x.shape[0] + alpha * x_tilde.shape[0])
+        	x_tilde_i = x_tilde[z.reshape(-1,)==i]
+        	mu[i] = (x.T.dot(w[:, i]) + alpha * x_tilde_i.sum(axis=0)) / (sum(w[:, i]) + alpha * sum(z==i))
+        	sigma[i] = ((w[:, i][:, None] * (x-mu[i])).T.dot(x-mu[i]) + alpha * (x_tilde_i-mu[i]).T.dot(x_tilde_i-mu[i])) / (sum(w[:, i]) + alpha * sum(z==i))
+
         # (3) Compute the log-likelihood of the data to check for convergence.
         # Hint: Make sure to include alpha in your calculation of ll.
         # Hint: For debugging, recall part (a). We showed that ll should be monotonically increasing.
+        it += 1
+        prev_ll = ll
+        p_xz = np.zeros(w.shape)
+        for i in range(K):
+        	p_xz[:, i] = np.exp(-0.5 * ((x-mu[i]).dot(np.linalg.inv(sigma[i])) * (x-mu[i])).sum(axis=1)) / (np.linalg.det(sigma[i])**0.5) * phi[i]
+        ll = np.sum(np.log(p_xz))
         # *** END CODE HERE ***
 
     return w
@@ -191,7 +237,7 @@ if __name__ == '__main__':
     # Run NUM_TRIALS trials to see how different initializations
     # affect the final predictions with and without supervision
     for t in range(NUM_TRIALS):
-        main(is_semi_supervised=False, trial_num=t)
+        main(is_semi_supervised=True, trial_num=t)
 
         # *** START CODE HERE ***
         # Once you've implemented the semi-supervised version,

@@ -1,0 +1,94 @@
+import numpy as np
+import util
+import tensorflow as tf
+
+from linear_model import LinearModel
+
+
+def main(train_path, eval_path, pred_path):
+    """Problem 1(b): Logistic regression with Newton's Method.
+
+    Args:
+        train_path: Path to CSV file containing dataset for training.
+        eval_path: Path to CSV file containing dataset for evaluation.
+        pred_path: Path to save predictions.
+    """
+    x_train, y_train = util.load_dataset(train_path, add_intercept=True)
+    
+    # *** START CODE HERE ***
+    clf = LogisticRegression()
+    clf.fit(x_train, y_train)
+    #clf.predict(x_eval)
+    # *** END CODE HERE ***
+
+
+class LogisticRegression(LinearModel):
+    """Logistic regression with Newton's Method as the solver.
+
+    Example usage:
+        > clf = LogisticRegression()
+        > clf.fit(x_train, y_train)
+        > clf.predict(x_eval)
+    """
+
+
+    def fit(self, x, y):
+        """Run Newton's Method to minimize J(theta) for logistic regression.
+
+        Args:
+            x: Training example inputs. Shape (m, n).
+            y: Training example labels. Shape (m,).
+        """
+        # *** START CODE HERE ***
+        # [m, n]
+        x = tf.convert_to_tensor(np.asarray(x, np.float32), np.float32)
+        # [m, 1]
+        y = tf.expand_dims(tf.convert_to_tensor(np.asarray(y, np.float32), np.float32), -1)
+        # [n, 1]
+        theta_ = tf.zeros([tf.shape(x)[1], 1])
+        # scalar
+        m_ = tf.cast(tf.shape(x)[0], tf.float32)
+        while True:
+            # [m, 1]
+            g_x_theta = tf.math.sigmoid(tf.linalg.matmul(x,  theta_))
+            print("g_x_theta:", g_x_theta)
+
+            # [m, 1]
+            v = (g_x_theta - y)
+            # [n, 1]
+            gradient = 1.0 / m_ * tf.linalg.matmul(tf.transpose(x), v)
+            print("gradient:", tf.squeeze(gradient))
+       
+            # [n, 1]
+            xt_g_x_theta = tf.linalg.matmul(tf.transpose(x), g_x_theta)
+            print("xt_g_x_theta:", xt_g_x_theta)
+
+            # [m, 1]
+            one_m_g_x_theta = 1 - g_x_theta
+
+            # [n, m]
+            exp1 = tf.linalg.matmul(xt_g_x_theta, one_m_g_x_theta)
+            print("exp1", exp1)
+
+            # [n, n]
+            hessian = 1.0 / m_ * tf.linalg.matmul(exp1, x)
+            print("hessian:", hessian)
+            old_theta = theta_
+            theta_ = theta_ - tf.linalg.matmul(tf.linalg.inv(hessian), gradient)
+            print("theta_:", tf.squeeze(theta_), "\n\n")
+            if (tf.norm(old_theta - theta_) < self.eps):
+                break
+
+        # *** END CODE HERE ***
+
+    def predict(self, x):
+        """Make a prediction given new inputs x.
+
+        Args:
+            x: Inputs of shape (m, n).
+
+        Returns:
+            Outputs of shape (m,).
+        """
+        # *** START CODE HERE ***
+        # *** END CODE HERE ***
